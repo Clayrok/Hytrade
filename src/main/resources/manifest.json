@@ -1,0 +1,7 @@
+{
+  "Group": "com.clayrok",
+  "Name": "Trade",
+  "Version": "1.0.0",
+  "Main": "com.clayrok.plugin.Trade",
+  "IncludesAssetPack": true
+}

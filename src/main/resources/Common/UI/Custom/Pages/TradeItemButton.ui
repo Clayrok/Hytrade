@@ -1,0 +1,33 @@
+$C = "../Common.ui";
+
+Button #ItemButton {
+    LayoutMode: Left;
+    Anchor: (Full: 1, Height: 40);
+    Style: $C.@DefaultButtonStyle;
+    Padding: (Full: 10);
+
+    ItemIcon #ItemIcon {
+        Anchor: (Width: 32, Height: 32);
+        Visible: true;
+    }
+
+    Label #ItemName {
+        FlexWeight: 1;
+        Anchor: (Full: 1, Top: 0.5);
+        Padding: (Left: 10);
+        
+        Style: (
+            FontSize: 14,
+            RenderBold: true,
+            TextColor: #ffffff
+        );
+    }
+
+    Label #ItemQte {
+        Style: (
+            FontSize: 14,
+            RenderBold: false,
+            TextColor: #ffffff
+        );
+    }
+}
