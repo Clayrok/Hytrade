@@ -1,4 +1,4 @@
-# Trade
+# Trade - Hytale mod
 
 This is my first mod ever, please be kind <3
 
