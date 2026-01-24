@@ -1,45 +1,21 @@
-.gradle
+# Gradle
+.gradle/
+build.gradle
+settings.gradle
 build/
-libs/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-.kotlin
-*.gradle.kts
 
-### IntelliJ IDEA ###
-.idea/
-*.iws
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+
+# IDE - ignore most but keep run configurations
+.idea/*
 *.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
 
-### Theia ###
-.theia
+# Hytale
+libs/HytaleServer.jar
+server/*
 
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
-.vscode/
-
-### Mac OS ###
-.DS_Store
+config_template/

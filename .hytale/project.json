@@ -1,0 +1,10 @@
+{
+  "groupId": "com.clayrok",
+  "artifactId": "trade",
+  "modName": "Trade",
+  "version": "1.0.0",
+  "buildSystem": "Gradle",
+  "language": "Java",
+  "jarPath": "build/libs/trade-1.0.0.jar",
+  "buildTask": "shadowJar"
+}

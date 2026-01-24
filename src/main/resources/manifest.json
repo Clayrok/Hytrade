@@ -2,6 +2,9 @@
   "Group": "com.clayrok",
   "Name": "Trade",
   "Version": "1.0.0",
-  "Main": "com.clayrok.plugin.Trade",
+  "Description": "Trade safely with other players.",
+  "Authors": [{"Name": "Clayrok"}],
+  "Main": "com.clayrok.trade.Trade",
+  "LoadOrder": "POSTWORLD",
   "IncludesAssetPack": true
 }
