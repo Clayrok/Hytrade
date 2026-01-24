@@ -66,12 +66,6 @@ public class TradePage extends InteractiveCustomUIPage<EventActionData>
 
         loadContentLayout(uiBuilder, eventBuilder);
 
-        String playerUsername = playerRef.getUsername();
-        String otherPlayerUsername = Universe.get().getPlayer(otherPlayerUUID).getUsername();
-
-        uiBuilder.set("#YourUsername.Text", playerUsername);
-        uiBuilder.set("#TheirUsername.Text", otherPlayerUsername);
-
         buildInventoryList(uiBuilder, eventBuilder, ref, store);
 
         eventBuilder.addEventBinding(
@@ -110,6 +104,12 @@ public class TradePage extends InteractiveCustomUIPage<EventActionData>
         if (nextLayoutIndex > contentLayouts.size() - 1) nextLayoutIndex = 0;
         uiBuilder.set(contentLayouts.get(currentLayoutIndex).layoutIconSelector + ".Visible", false);
         uiBuilder.set(contentLayouts.get(nextLayoutIndex).layoutIconSelector + ".Visible", true);
+
+        String playerUsername = playerRef.getUsername();
+        String otherPlayerUsername = Universe.get().getPlayer(otherPlayerUUID).getUsername();
+
+        uiBuilder.set("#YourUsername.Text", playerUsername);
+        uiBuilder.set("#TheirUsername.Text", otherPlayerUsername);
 
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
