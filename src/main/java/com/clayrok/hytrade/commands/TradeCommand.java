@@ -29,7 +29,7 @@ public class TradeCommand extends AbstractPlayerCommand
 
     public TradeCommand()
     {
-        super("Trade", "Opens the player trading panel.", false);
+        super("Trade", "Sends a trade request.", false);
         playerArg = withRequiredArg("playerName", "Target player", ArgTypes.STRING);
 
         if (!HytradeConfig.get().arePermsEmpty()) this.requirePermission(HytradeConfig.get().getFullPermTrade());
@@ -40,22 +40,26 @@ public class TradeCommand extends AbstractPlayerCommand
     {
         UUID playerUUID = playerRef.getUuid();
 
-        String playerName = playerArg.get(context);
-        PlayerRef targetPlayerRef = Universe.get().getPlayerByUsername(playerName, NameMatching.DEFAULT);
+        String targetPlayerName = playerArg.get(context);
+        PlayerRef targetPlayerRef = Universe.get().getPlayerByUsername(targetPlayerName, NameMatching.DEFAULT);
 
         try
         {
             if (targetPlayerRef == null) throw new Exception("Player not found.");
+
+            UUID targetPlayerUUID = targetPlayerRef.getUuid();
+            if (playerUUID.equals(targetPlayerUUID)) throw new Exception("You cannot trade with yourself.");
+
             if (Hytrade.isPlayerTrading(playerRef)) throw new Exception("You are already trading.");
             if (isOnCooldown(playerUUID)) throw new Exception("Please wait before trading again.");
 
-            PlayerConfigData targetConfig = PlayerConfigData.getConfigData(targetPlayerRef.getUuid());
+            PlayerConfigData targetConfig = PlayerConfigData.getConfigData(targetPlayerUUID);
             if (targetConfig.vars.tradeIgnore.getValue()) return;
 
             if (isTooFar(playerRef, targetPlayerRef)) throw new Exception("Player too far away.");
 
             if (Hytrade.isPlayerTrading(targetPlayerRef)) return;
-            if (isIgnored(playerUUID, targetPlayerRef.getUuid())) return;
+            if (isIgnored(playerUUID, targetPlayerUUID)) return;
 
             Hytrade.askForTrade(playerRef, targetPlayerRef);
         }
