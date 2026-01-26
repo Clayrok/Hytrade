@@ -1,0 +1,15 @@
+$C = "../../../Common.ui";
+
+Group {
+    LayoutMode: Left;
+    FlexWeight: 1;
+
+    //TradePools group
+    Group #TradePools {
+        LayoutMode: Top;
+        FlexWeight: 1;
+        Padding: (Left: 5);
+
+
+    }
+}

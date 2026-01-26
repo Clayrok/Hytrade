@@ -1,10 +1,10 @@
 {
   "Group": "com.clayrok",
-  "Name": "Trade",
-  "Version": "1.0.0",
+  "Name": "Hytrade",
+  "Version": "1.0.3",
   "Description": "Trade safely with other players.",
   "Authors": [{"Name": "Clayrok"}],
-  "Main": "com.clayrok.trade.Trade",
+  "Main": "com.clayrok.hytrade.Hytrade",
   "LoadOrder": "POSTWORLD",
   "IncludesAssetPack": true
 }

@@ -1,0 +1,38 @@
+$C = "../../Common.ui";
+
+
+$C.@Container #TradePoolTheirs {
+    ScrollbarStyle: $C.@DefaultScrollbarStyle;
+    FlexWeight: 1;
+    LayoutMode: Top;
+
+    #Title {
+        Group {
+            $C.@Title #TheirUsername {
+                @Text = "Theirs";
+                Style: (TextColor: #ffffff, Alignment: Center);
+            }
+
+            Group {
+                Anchor: (Width: 30, Height: 30, Right: 20);
+
+                Panel #TheirCheckmark{
+                   Visible: false;
+                   Background: "../Icons/checkmark.png";
+                }
+            }
+        }
+    }
+
+    #Content {
+        Anchor: (Horizontal: 1);
+        FlexWeight: 1;
+        Padding: (Full: 10);
+
+        Group #TheirsList {
+            LayoutMode: TopScrolling;
+            Padding: (Left: 10);
+            ScrollbarStyle: $C.@DefaultScrollbarStyle;
+        }
+    }
+}
