@@ -15,7 +15,11 @@ pom.xml.versionsBackup
 *.iml
 
 # Hytale
+.hytale
 libs/HytaleServer.jar
 server/*
+
+.theia/
+.kilocode/
 
 config_template/
