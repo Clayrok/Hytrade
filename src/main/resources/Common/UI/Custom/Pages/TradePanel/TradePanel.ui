@@ -1,11 +1,13 @@
 $C = "../../Common.ui";
 
 
-$C.@PageOverlay {
+Group {
+    Background: #000000(0.3);
+
     $C.@DecoratedContainer #TradePanel {
         #Title {
             Group {
-                $C.@Title {
+                $C.@Title #PanelTitle {
                     @Text = "Trade";
                 }
 

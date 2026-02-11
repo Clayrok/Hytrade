@@ -1,18 +1,19 @@
 package com.clayrok.hytrade.pages;
 
+import com.clayrok.hytrade.DynamicImageService;
 import com.clayrok.hytrade.Hytrade;
 import com.clayrok.hytrade.HytradeConfig;
+import com.clayrok.hytrade.HytradeVaultUnlocked;
 import com.clayrok.hytrade.data.*;
-import com.clayrok.hytrade.helpers.I18nHelper;
-import com.clayrok.hytrade.helpers.JsonStr;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.SoundCategory;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
+import com.hypixel.hytale.server.core.asset.common.CommonAssetRegistry;
 import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
@@ -28,17 +29,24 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
+import net.milkbowl.vault2.economy.Economy;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 
 public class TradePanel extends InteractiveCustomUIPage<EventActionData>
 {
-    private final List<TradeContentLayoutData> contentLayouts = TradeContentLayoutData.getAllLayouts();
+    private final List<TradeContentLayoutData> contentLayouts;
     private int currentLayoutIndex = 0;
 
+    private ScheduledFuture<?> securityChecksHandle = null;
+
     private PlayerConfigData playerConfigData = null;
+    private String language = "en-US";
 
     private TradeData tradeData = null;
     private UUID playerUUID = null;
@@ -50,11 +58,13 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         super(playerRef, CustomPageLifetime.CantClose, EventActionData.CODEC);
 
         TradeData.subscribeRefresh(this::refresh);
+        TradeData.subscribeRefreshMoney(this::refreshAllMoneyValues);
 
         this.tradeData = TradeData;
         playerUUID = playerRef.getUuid();
         otherPlayerUUID = TradeData.playerUUIDs.get(TradeData.playerUUIDs.indexOf(playerUUID) == 0 ? 1 : 0);
 
+        contentLayouts = TradeContentLayoutData.getAllLayouts();
         loadConfig();
     }
 
@@ -70,9 +80,9 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
                 break;
             }
         }
-    }
 
-    public static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+        language = playerConfigData.vars.language.getValue();
+    }
 
     @Override
     public void build(@NonNullDecl Ref<EntityStore> ref,
@@ -80,6 +90,13 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
                       @NonNullDecl UIEventBuilder eventBuilder,
                       @NonNullDecl Store<EntityStore> store)
     {
+        //Send currency icon to player
+        String currencyIconPath = HytradeConfig.get().getFullCurrencyIconPath();
+        if (currencyIconPath.length() > 0)
+        {
+            DynamicImageService.sendLocalToInterfaceSlot(playerRef, currencyIconPath, 0);
+        }
+
         uiBuilder.append("Pages/TradePanel/TradePanel.ui");
 
         loadContentLayout(uiBuilder, eventBuilder);
@@ -88,24 +105,21 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#MoveLeftBtn",
-                new EventData().append("ActionDataJson", new JsonStr()
-                        .add("actionId", "POS_UPDATE")
-                        .add("movePanelDirection", -1).str())
+                new EventData().append("ActionId", "POS_UPDATE")
+                        .append("movePanelDirection", String.valueOf(-1))
         );
 
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#MoveRightBtn",
-                new EventData().append("ActionDataJson", new JsonStr()
-                        .add("actionId", "POS_UPDATE")
-                        .add("movePanelDirection", 1).str())
+                new EventData().append("ActionId", "POS_UPDATE")
+                        .append("movePanelDirection", String.valueOf(1))
         );
 
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#ChangeLayout",
-                new EventData().append("ActionDataJson", new JsonStr()
-                        .add("actionId", "CHANGE_LAYOUT").str())
+                new EventData().append("ActionId", "CHANGE_LAYOUT")
         );
 
         refresh();
@@ -116,6 +130,7 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
     @Override
     public void onDismiss(@NonNullDecl Ref<EntityStore> ref, @NonNullDecl Store<EntityStore> store)
     {
+        securityChecksHandle.cancel(true);
         playCloseSound();
     }
 
@@ -136,7 +151,10 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         //Clears all the content
         uiBuilder.clear("#TradePanel #Content");
         contentLayouts.get(currentLayoutIndex).buildFunction.accept(uiBuilder);
-        uiBuilder.append("#TradePanel #Content", "Pages/TradePanel/TradeBottomButtons.ui");
+        uiBuilder.append("#TradePanel #Content", "Pages/TradePanel/Elements/BottomButtons.ui");
+
+        //Inits money
+        initMoney(uiBuilder, eventBuilder);
 
         //Updates layout button icon
         int nextLayoutIndex = currentLayoutIndex + 1;
@@ -153,15 +171,41 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#CancelBtn",
-                new EventData().append("ActionDataJson", new JsonStr()
-                        .add("actionId", "CANCEL").str())
+                EventData.of("ActionId", "CANCEL")
         );
 
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#ValidateBtn",
-                new EventData().append("ActionDataJson", new JsonStr()
-                        .add("actionId", "VALIDATE").str())
+                new EventData().append("ActionId", "VALIDATE")
+        );
+    }
+
+    private void initMoney(UICommandBuilder uiBuilder, UIEventBuilder eventBuilder)
+    {
+        Economy economyObj = HytradeVaultUnlocked.getEconomyObj();
+        HytradeConfig config = HytradeConfig.get();
+        if (economyObj == null || !config.getIsMoneyTradable()) return;
+
+        uiBuilder.set("#TradePoolYours #MoneyGroup.Visible", true);
+        uiBuilder.set("#TradePoolTheirs #MoneyGroup.Visible", true);
+
+        //Apply downloaded currency icons
+        if (HytradeConfig.get().getFullCurrencyIconPath().length() > 0)
+        {
+            uiBuilder.set("#TradePoolYours #CurrencyIcon.Background", "Pages/Dynamic/DynamicImage1.png");
+            uiBuilder.set("#TradePoolTheirs #CurrencyIcon.Background", "Pages/Dynamic/DynamicImage1.png");
+        }
+
+        if (!HytradeConfig.get().getIsMoneyDecimal())
+        {
+            uiBuilder.set("#TradePoolYours #YourMoney.Format.MaxDecimalPlaces", 0);
+            uiBuilder.set("#TradePoolYours #YourMoney.Format.Step", 1);
+        }
+
+        eventBuilder.addEventBinding(
+                CustomUIEventBindingType.ValueChanged, "#TradePoolYours #YourMoney",
+                new EventData().append("ActionId", "MONEY_UPDATED").append("@Amount", "#YourMoney.Value")
         );
     }
 
@@ -191,6 +235,8 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
 
     private void refresh()
     {
+        if (securityChecksHandle != null) securityChecksHandle.cancel(true);
+
         UICommandBuilder uiBuilder = new UICommandBuilder();
         UIEventBuilder eventBuilder = new UIEventBuilder();
 
@@ -199,7 +245,70 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         refreshLists(uiBuilder, eventBuilder);
         refreshValidation(uiBuilder, eventBuilder);
 
+        translate(uiBuilder);
+
         sendUpdate(uiBuilder, eventBuilder, false);
+
+        securityChecksHandle = Hytrade.SCHEDULER.scheduleAtFixedRate(this::doSecurityPass, 500, 500, TimeUnit.MILLISECONDS);
+    }
+
+    private void doSecurityPass()
+    {
+        if (tradeData == null) return;
+
+        UICommandBuilder uiBuilder = new UICommandBuilder();
+        boolean isDirty = false;
+
+        for (UUID uuid : tradeData.playerUUIDs)
+        {
+            Economy economyObj = HytradeVaultUnlocked.getEconomyObj();
+            if (economyObj != null)
+            {
+                Float moneyTradeAmount = tradeData.playersMoneyInTrade.get(uuid);
+                Float balanceAmount = economyObj.balance("Hytrade", uuid).floatValue();
+                Float clampedMoneyTradeAmount = Math.clamp(moneyTradeAmount, 0, balanceAmount);
+
+                if (!moneyTradeAmount.equals(clampedMoneyTradeAmount))
+                {
+                    tradeData.updateMoney(uuid, clampedMoneyTradeAmount);
+                    isDirty = true;
+                }
+            }
+        }
+
+        if (isDirty) sendUpdate(uiBuilder);
+    }
+
+    private void refreshAllMoneyValues()
+    {
+        UICommandBuilder uiBuilder = new UICommandBuilder();
+
+        Float theirMoneyAmount = tradeData.playersMoneyInTrade.get(otherPlayerUUID);
+        if (theirMoneyAmount != null)
+        {
+            String otherPlayerAmountStr = HytradeConfig.get().getIsMoneyDecimal() ?
+                                          theirMoneyAmount.toString() :
+                                          String.valueOf(((int)(float) theirMoneyAmount));
+
+            uiBuilder.set("#TheirMoney.Text", otherPlayerAmountStr);
+        }
+
+        Float yourMoneyAmount = tradeData.playersMoneyInTrade.get(playerUUID);
+        uiBuilder.set("#YourMoney.Value", yourMoneyAmount);
+
+        sendUpdate(uiBuilder);
+    }
+
+    private void translate(UICommandBuilder uiBuilder)
+    {
+        String language = playerConfigData.vars.language.getValue();
+
+        uiBuilder.set("#PanelTitle.Text", TranslationHelper.getTranslation("ui.trade.title", language));
+        uiBuilder.set("#ChangeLayout.TooltipText", TranslationHelper.getTranslation("ui.trade.change_layout", language));
+        uiBuilder.set("#MoveLeftBtn.TooltipText", TranslationHelper.getTranslation("ui.trade.move_left", language));
+        uiBuilder.set("#MoveRightBtn.TooltipText", TranslationHelper.getTranslation("ui.trade.move_right", language));
+        uiBuilder.set("#CancelBtn #Label.Text", TranslationHelper.getTranslation("ui.trade.cancel", language));
+        uiBuilder.set("#InventoryTitle.Text", TranslationHelper.getTranslation("ui.trade.inventory", language));
     }
 
     private void updateTradePanelLayout(UICommandBuilder uiBuilder)
@@ -251,25 +360,30 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         });
     }
 
-    private  void refreshValidation(UICommandBuilder uiBuilder, UIEventBuilder eventBuilder)
+    private void refreshValidation(UICommandBuilder uiBuilder, UIEventBuilder eventBuilder)
     {
+        String errorMessage = null;
+        boolean isWaiting = tradeData.hasPlayerValidated(playerUUID);
+
         if (emptySlotsCount + tradeData.playersItemsPools.get(playerUUID).size() < tradeData.playersItemsPools.get(otherPlayerUUID).size())
         {
-            updateValidationBtn(uiBuilder, true, "Trade", "Not enough space.");
+            errorMessage = TranslationHelper.getTranslation("ui.trade.error.no_space", language);
         }
-        else if (tradeData.playersItemsPools.get(playerUUID).isEmpty() && tradeData.playersItemsPools.get(otherPlayerUUID).isEmpty())
+        else if (tradeData.isTradeEmpty())
         {
-            updateValidationBtn(uiBuilder, true, "Trade", "No item added to hytrade.");
+            errorMessage = TranslationHelper.getTranslation("ui.trade.error.empty", language);
         }
-        else if (tradeData.hasPlayerValidated(playerUUID))
+        else if (isWaiting)
         {
-            updateValidationBtn(uiBuilder, true, "Waiting...", "Waiting for other player validation...");
-        }
-        else
-        {
-            updateValidationBtn(uiBuilder, false, "Trade", null);
+            errorMessage = TranslationHelper.getTranslation("ui.trade.error.waiting_other", language);
         }
 
+        String label = isWaiting ?
+                       TranslationHelper.getTranslation("ui.trade.waiting", language) :
+                       TranslationHelper.getTranslation("ui.trade.button", language);
+        boolean isDisabled = (errorMessage != null);
+
+        updateValidationBtn(uiBuilder, isDisabled, label, errorMessage);
         updateValidationCheckmarks(uiBuilder);
     }
 
@@ -302,6 +416,8 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
                                String onClickActionId,
                                Boolean isDisabled)
     {
+        if (listSelector == null || listSelector.length() == 0 || itemStack == null || itemStackId < 0) return;
+
         String groupId = "#Item%s".formatted(itemStackId);
 
         uiBuilder.appendInline(listSelector, """
@@ -313,13 +429,17 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         """.formatted(groupId));
 
         groupId = listSelector + " " + groupId;
-        
-        uiBuilder.append(groupId, "Pages/TradePanel/TradeItemButton.ui");
+
+        String itemName = TranslationHelper.getItemStackDisplayName(playerRef.getLanguage(), itemStack);
+        itemName = itemName != null && itemName.length() > 0 ? itemName : TranslationHelper.getItemStackDisplayName("en-US", itemStack);
+        itemName = itemName != null && itemName.length() > 0 ? itemName : "";
+
+        uiBuilder.append(groupId, "Pages/TradePanel/Elements/ItemButton.ui");
 
         uiBuilder.set(groupId + " #ItemButtonLine.Disabled", isDisabled);
 
         uiBuilder.set(groupId + " #ItemIcon.ItemId", itemStack.getItemId());
-        uiBuilder.set(groupId + " #ItemName.Text", I18nHelper.getItemStackDisplayName(playerRef.getLanguage(), itemStack));
+        uiBuilder.set(groupId + " #ItemName.Text", itemName);
         uiBuilder.set(groupId + " #ItemQte.Text", "x" + itemStack.getQuantity());
 
         if (onClickActionId != null && !onClickActionId.isEmpty())
@@ -327,34 +447,25 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
             eventBuilder.addEventBinding(
                     CustomUIEventBindingType.Activating,
                     groupId + " #ItemButtonLine",
-                    new EventData().append("ActionDataJson", new JsonStr()
-                            .add("actionId", onClickActionId)
-                            .add("stackId", itemStackId).str())
+                    new EventData().append("ActionId", onClickActionId)
+                            .append("stackId", String.valueOf(itemStackId))
             );
         }
     }
 
     @Override
-    public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, EventActionData jsonData)
+    public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, String rawData)
     {
-        JsonObject obj = null;
-        if (jsonData.actionDataJson != null)
-        {
-            obj = JsonParser.parseString(jsonData.actionDataJson).getAsJsonObject();
-        }
-        else
-        {
-            sendUpdate();
-            return;
-        }
+        JsonObject jsonObj = JsonParser.parseString(rawData).getAsJsonObject();
 
-        String actionId = obj.get("actionId").getAsString();
+        String actionId = jsonObj.get("ActionId").getAsString();
         switch (actionId)
         {
             case "CHANGE_LAYOUT" -> onChangeLayoutClicked();
-            case "POS_UPDATE" -> onChangePagePositionClicked(obj.get("movePanelDirection").getAsShort());
-            case "ADD_ITEM" -> onAddItemClicked(obj.get("stackId").getAsInt());
-            case "REMOVE_ITEM" -> onRemoveItemClicked(obj.get("stackId").getAsInt());
+            case "POS_UPDATE" -> onChangePagePositionClicked(jsonObj.get("movePanelDirection").getAsShort());
+            case "ADD_ITEM" -> onAddItemClicked(jsonObj.get("stackId").getAsInt());
+            case "REMOVE_ITEM" -> onRemoveItemClicked(jsonObj.get("stackId").getAsInt());
+            case "MONEY_UPDATED" -> onMoneyAmountUpdated(jsonObj.get("@Amount").getAsString());
             case "CANCEL" -> onCancelClicked();
             case "VALIDATE" -> onValidateClicked();
         }
@@ -403,6 +514,23 @@ public class TradePanel extends InteractiveCustomUIPage<EventActionData>
         tradeData.playersInventory.get(playerUUID).put(slotId, stackData);
 
         tradeData.resetValidation();
+    }
+
+    private void onMoneyAmountUpdated(String strAmount)
+    {
+        Float amount = null;
+        try
+        {
+            amount = Float.parseFloat(strAmount);
+        }
+        catch (Exception e) {}
+
+
+        if (amount != null)
+        {
+            tradeData.updateMoney(playerUUID, amount);
+            doSecurityPass();
+        }
     }
 
     private void onCancelClicked()

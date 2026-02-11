@@ -1,6 +1,7 @@
 package com.clayrok.hytrade.helpers;
 
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.clayrok.hytrade.data.NotificationData;
@@ -9,9 +10,9 @@ import com.hypixel.hytale.protocol.ItemWithAllMetadata;
 
 public class NotificationHelper
 {
-    public static void send(NotificationData params)
+    public static void send(PlayerRef playerRef, NotificationData params)
     {
-        var packetHandler = params.playerRef.getPacketHandler();
+        var packetHandler = playerRef.getPacketHandler();
 
         var primaryMessage = Message.raw(params.title).color(params.titleColor);
         var secondaryMessage = Message.raw(params.subtitle).color(params.subtitleColor);

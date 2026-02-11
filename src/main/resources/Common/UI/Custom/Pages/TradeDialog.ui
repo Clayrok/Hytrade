@@ -9,7 +9,7 @@ Group {
         Anchor: (Width: 525, Height: 160);
 
         #Title {
-            $C.@Title {
+            $C.@Title #DialogTitle {
                 @Text = "Trade";
             }
         }
@@ -25,7 +25,7 @@ Group {
                     Style: (TextColor: #f4af43, HorizontalAlignment: Center, FontSize: 16, LetterSpacing: 1);
                 }
 
-                Label {
+                Label #AskPhrase {
                     Text: " wants to trade with you. Do you accept?";
                     Style: (TextColor: #ffffff, HorizontalAlignment: Center, FontSize: 16, LetterSpacing: 1);
                 }

@@ -8,7 +8,6 @@ Group {
     Group #TradePools {
         LayoutMode: Top;
         FlexWeight: 1;
-        Padding: (Left: 5);
 
 
     }

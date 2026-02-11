@@ -3,7 +3,11 @@ package com.clayrok.hytrade;
 import com.clayrok.hytrade.data.PlayerConfigData;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hypixel.hytale.common.plugin.PluginIdentifier;
+import com.hypixel.hytale.common.semver.SemverRange;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.HytaleServer;
+import net.cfh.vault.VaultUnlockedServicesManager;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,11 +31,16 @@ public class HytradeConfig
             tradePanelOpenSoundId,
             tradePanelCloseSoundId,
             tradeDialogOpenSoundId,
-            tradeDialogCloseSoundId;
+            tradeDialogCloseSoundId,
+            currencyIconFilename;
 
     private double
             tradeRequestCooldownSeconds,
             tradeMaxDistance;
+
+    private boolean
+            isMoneyTradable,
+            isMoneyDecimal;
 
     public static HytradeConfig get()
     {
@@ -73,6 +82,11 @@ public class HytradeConfig
         addEntry("TRADE_PANEL_CLOSE_SOUND_ID", "SFX_Drag_Items_Chest");
         addEntry("TRADE_DIALOG_OPEN_SOUND_ID", "SFX_Cactus_Hit");
         addEntry("TRADE_DIALOG_CLOSE_SOUND_ID", "SFX_Branch_Walk");
+
+        addCategoryTitle("Money");
+        addEntry("IS_MONEY_TRADABLE", false);
+        addEntry("IS_MONEY_DECIMAL", false);
+        addEntry("CURRENCY_ICON_FILENAME", "");
     }
 
     private void addCategoryTitle(String title)
@@ -153,6 +167,11 @@ public class HytradeConfig
             tradeDialogOpenSoundId = getString(json, "TRADE_DIALOG_OPEN_SOUND_ID", (String) ((ConfigValue)schema.get("TRADE_DIALOG_OPEN_SOUND_ID")).defaultValue);
             tradeDialogCloseSoundId = getString(json, "TRADE_DIALOG_CLOSE_SOUND_ID", (String) ((ConfigValue)schema.get("TRADE_DIALOG_CLOSE_SOUND_ID")).defaultValue);
 
+            isMoneyTradable = getBool(json, "IS_MONEY_TRADABLE", (boolean) ((ConfigValue)schema.get("IS_MONEY_TRADABLE")).defaultValue);
+            isMoneyDecimal = getBool(json, "IS_MONEY_DECIMAL", (boolean) ((ConfigValue)schema.get("IS_MONEY_DECIMAL")).defaultValue);
+            currencyIconFilename = getString(json, "CURRENCY_ICON_FILENAME", (String) ((ConfigValue)schema.get("CURRENCY_ICON_FILENAME")).defaultValue);
+            if (!Files.exists(Path.of(getConfigFolderPath(), currencyIconFilename))) currencyIconFilename = "";
+
             return "Config reloaded.";
         }
         catch (Exception e)
@@ -169,6 +188,7 @@ public class HytradeConfig
     private String getStringOrNull(JsonObject json, String key) { return (json.has(key) && !json.get(key).isJsonNull()) ? json.get(key).getAsString() : null; }
     private String getString(JsonObject json, String key, String def) { return (json.has(key) && !json.get(key).isJsonNull()) ? json.get(key).getAsString() : def; }
     private double getDouble(JsonObject json, String key, double def) { return (json.has(key) && !json.get(key).isJsonNull()) ? json.get(key).getAsDouble() : def; }
+    private boolean getBool(JsonObject json, String key, boolean def) { return (json.has(key) && !json.get(key).isJsonNull()) ? json.get(key).getAsBoolean() : def; }
 
     public static String getConfigFolderPath()
     {
@@ -180,13 +200,19 @@ public class HytradeConfig
         catch (Exception e) { return "Hytrade"; }
     }
 
-    public boolean arePermsEmpty() { return permBase != null; }
-    public String getFullPermSettings() { return !arePermsEmpty() && permSettings != null ?
-                                                 permBase + "." + permSettings : null; }
-    public String getFullPermTrade() { return !arePermsEmpty() && permTrade != null ? permBase + "." + permTrade :
-                                              null; }
-    public String getFullPermFromFar() { return !arePermsEmpty() && permFromFar != null ?
-                                                permBase + "." + permFromFar : null; }
+    public boolean arePermsEmpty() { return permBase == null; }
+    public String getFullPermSettings()
+    {
+        return !arePermsEmpty() && permSettings != null ? permBase + "." + permSettings : null;
+    }
+    public String getFullPermTrade()
+    {
+        return !arePermsEmpty() && permTrade != null ? permBase + "." + permTrade : null;
+    }
+    public String getFullPermFromFar()
+    {
+        return !arePermsEmpty() && permFromFar != null ? permBase + "." + permFromFar : null;
+    }
 
     public double getTradeRequestCooldownSeconds() { return tradeRequestCooldownSeconds; }
     public double getTradeMaxDistance() { return tradeMaxDistance; }
@@ -196,4 +222,12 @@ public class HytradeConfig
     public String getTradePanelCloseSoundId() { return tradePanelCloseSoundId; }
     public String getTradeDialogOpenSoundId() { return tradeDialogOpenSoundId; }
     public String getTradeDialogCloseSoundId() { return tradeDialogCloseSoundId; }
+
+    public boolean getIsMoneyTradable() { return isMoneyTradable; }
+    public boolean getIsMoneyDecimal() { return isMoneyDecimal; }
+    public String getFullCurrencyIconPath()
+    {
+        return currencyIconFilename != null && currencyIconFilename.length() > 0 ?
+               Path.of(getConfigFolderPath(), currencyIconFilename).toString() : "";
+    }
 }

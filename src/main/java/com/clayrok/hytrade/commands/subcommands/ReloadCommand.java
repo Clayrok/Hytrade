@@ -3,7 +3,9 @@ package com.clayrok.hytrade.commands.subcommands;
 import com.clayrok.hytrade.Hytrade;
 import com.clayrok.hytrade.HytradeConfig;
 import com.clayrok.hytrade.data.NotificationData;
+import com.clayrok.hytrade.data.PlayerConfigData;
 import com.clayrok.hytrade.helpers.NotificationHelper;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -24,14 +26,18 @@ public class ReloadCommand extends AbstractPlayerCommand
     @Override
     protected void execute(@NonNullDecl CommandContext commandContext, @NonNullDecl Store<EntityStore> store, @NonNullDecl Ref<EntityStore> ref, @NonNullDecl PlayerRef playerRef, @NonNullDecl World world)
     {
-        NotificationData notificationData = new NotificationData();
-        notificationData.iconId = HytradeConfig.get().getNotificationIconId();
-        notificationData.title = "Hytrade";
-        notificationData.titleColor = "#ffffff";
-        notificationData.subtitleColor = "#2ae917";
-        notificationData.subtitle = HytradeConfig.get().reload();
-        notificationData.playerRef = playerRef;
+        String language = PlayerConfigData.getConfigData(playerRef.getUuid()).vars.language.getValue();
 
-        NotificationHelper.send(notificationData);
+        HytradeConfig.get().reload();
+        TranslationHelper.loadAllTranslations();
+
+        NotificationData notificationData = new NotificationData(
+                TranslationHelper.getTranslation("notification.hytrade.title", language),
+                TranslationHelper.getTranslation("notification.config_reloaded", language),
+                HytradeConfig.get().getNotificationIconId(),
+                "#ffffff", "#2ae917"
+        );
+
+        NotificationHelper.send(playerRef, notificationData);
     }
 }

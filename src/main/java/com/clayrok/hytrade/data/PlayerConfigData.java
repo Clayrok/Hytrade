@@ -1,5 +1,6 @@
 package com.clayrok.hytrade.data;
 
+import com.clayrok.hytrade.Hytrade;
 import com.clayrok.hytrade.HytradeConfig;
 import com.google.gson.*;
 import java.nio.file.Files;
@@ -19,7 +20,6 @@ public class PlayerConfigData
     private final static Gson GSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
 
     private final static Set<PlayerConfigData> DIRTY_CONFIGS = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private final static ScheduledExecutorService SCHEDULER = Executors.newSingleThreadScheduledExecutor();
 
     private static final long CACHE_TTL_MS = 5 * 60 * 1000L; // 5 minutes
     private static final ConcurrentHashMap<UUID, CachedConfig> CACHE = new ConcurrentHashMap<>();
@@ -28,7 +28,7 @@ public class PlayerConfigData
     {
         CONFIG_FOLDER_PATH = HytradeConfig.getConfigFolderPath().toString();
 
-        SCHEDULER.scheduleAtFixedRate(() ->
+        Hytrade.SCHEDULER.scheduleAtFixedRate(() ->
         {
             if (!DIRTY_CONFIGS.isEmpty())
             {
@@ -106,6 +106,7 @@ public class PlayerConfigData
 
     public class ConfigVars
     {
+        public final ConfigVar<String> language = new ConfigVar<>("en-US");
         public final ConfigVar<LastTradeRequestSent> lastTradeRequestEpochTime = new ConfigVar<>(new LastTradeRequestSent(0, null));
         public final ConfigVar<Integer> tradePanelPosition = new ConfigVar<>(0);
         public final ConfigVar<String> tradePanelLayoutName = new ConfigVar<>("Horizontal");

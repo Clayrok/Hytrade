@@ -2,42 +2,48 @@ package com.clayrok.hytrade;
 
 import com.clayrok.hytrade.commands.HytradeCommand;
 import com.clayrok.hytrade.commands.TradeCommand;
+import com.clayrok.hytrade.customEvents.DamageSystem;
+import com.clayrok.hytrade.customEvents.DeathEvent;
 import com.clayrok.hytrade.data.PlayerConfigData;
 import com.clayrok.hytrade.data.TradeData;
 import com.clayrok.hytrade.data.NotificationData;
 import com.clayrok.hytrade.helpers.NotificationHelper;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.clayrok.hytrade.pages.Settings;
 import com.clayrok.hytrade.pages.TradeDialog;
 import com.clayrok.hytrade.pages.TradePanel;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.event.EventRegistry;
+import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.protocol.packets.interface_.Page;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
-import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
-import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
+import com.hypixel.hytale.server.core.permissions.PermissionsModule;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+import net.milkbowl.vault2.economy.Economy;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 
 public class Hytrade extends JavaPlugin
 {
-    public final static List<TradeData> onGoingTrades = new ArrayList<>();
+    public final static ScheduledExecutorService SCHEDULER = Executors.newSingleThreadScheduledExecutor();
+    public final static List<TradeData> ON_GOING_TRADES = new ArrayList<>();
 
     private final EventRegistry events = getEventRegistry();
 
@@ -50,22 +56,63 @@ public class Hytrade extends JavaPlugin
     @Override
     protected void setup()
     {
+        TranslationHelper.loadAllTranslations();
+
         getCommandRegistry().registerCommand(new TradeCommand());
         getCommandRegistry().registerCommand(new HytradeCommand());
 
-        events.register(PlayerDisconnectEvent.class, event -> {
-            PlayerRef playerRef = event.getPlayerRef();
+        events.register(PlayerDisconnectEvent.class, event -> cancelPlayerTrades(event.getPlayerRef()));
+        getEntityStoreRegistry().registerSystem(new DeathEvent());
+        getEntityStoreRegistry().registerSystem(new DamageSystem());
 
-            for (TradeData tradeData : onGoingTrades)
+        SCHEDULER.scheduleAtFixedRate(() -> {
+            doSecurityPass();
+        }, 0, 500, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    protected void shutdown()
+    {
+        SCHEDULER.shutdownNow();
+    }
+
+    private static void doSecurityPass()
+    {
+        List<Vector3d> playerPositions = new ArrayList<>();
+
+        for (TradeData trade : ON_GOING_TRADES)
+        {
+            boolean hasFromFar = false;
+            for (UUID playerUUID : trade.playerUUIDs)
             {
-                if (tradeData.playerUUIDs.contains(playerRef.getUuid()))
+                PlayerRef playerRef = Universe.get().getPlayer(playerUUID);
+                playerPositions.add(playerRef.getTransform().getPosition());
+                if (PermissionsModule.get().hasPermission(playerUUID, HytradeConfig.get().getFullPermFromFar())) hasFromFar = true;
+            }
+
+            if (!hasFromFar && !areAllWithinDistance(playerPositions)) cancelTrade(trade);
+
+            playerPositions.clear();
+        }
+    }
+
+    private static boolean areAllWithinDistance(List<Vector3d> positions)
+    {
+        double maxDistanceSqr = HytradeConfig.get().getTradeMaxDistance();
+        maxDistanceSqr *= maxDistanceSqr;
+
+        for (int i = 0; i < positions.size() - 1; i++)
+        {
+            for (int j = i + 1; j < positions.size(); j++)
+            {
+                if (positions.get(i).distanceSquaredTo(positions.get(j)) > maxDistanceSqr)
                 {
-                    Universe.get().getWorld(playerRef.getWorldUuid()).execute(() -> {
-                        cancelTrade(tradeData);
-                    });
+                    return false;
                 }
             }
-        });
+        }
+
+        return true;
     }
 
     public static void askForTrade(PlayerRef senderPlayerRef, PlayerRef targetPlayerRef)
@@ -88,19 +135,20 @@ public class Hytrade extends JavaPlugin
 
     public static void openTrade(PlayerRef senderPlayerRef, PlayerRef targetPlayerRef)
     {
-        TradeData TradeData = new TradeData();
-
         UUID playerUuid = senderPlayerRef.getUuid();
+        UUID player2Uuid = targetPlayerRef.getUuid();
+
+        TradeData TradeData = new TradeData(playerUuid, player2Uuid);
+
         TradeData.playerUUIDs.add(playerUuid);
         TradeData.playersInventory.put(playerUuid, new HashMap<>());
         TradeData.playersItemsPools.put(playerUuid, new HashMap<>());
 
-        UUID player2Uuid = targetPlayerRef.getUuid();
         TradeData.playerUUIDs.add(player2Uuid);
         TradeData.playersInventory.put(player2Uuid, new HashMap<>());
         TradeData.playersItemsPools.put(player2Uuid, new HashMap<>());
 
-        Hytrade.onGoingTrades.add(TradeData);
+        Hytrade.ON_GOING_TRADES.add(TradeData);
 
         openPlayerTrade(senderPlayerRef, TradeData);
         if(!playerUuid.equals(player2Uuid)) openPlayerTrade(targetPlayerRef, TradeData);
@@ -118,19 +166,23 @@ public class Hytrade extends JavaPlugin
         });
     }
 
-    public static void cancelTrade(TradeData tradeData)
+    public static void cancelPlayerTrades(PlayerRef playerRef)
     {
-        NotificationData notificationData = new NotificationData();
-        notificationData.title = "Trade";
-        notificationData.subtitle = "Trade cancelled.";
-        notificationData.iconId = HytradeConfig.get().getNotificationIconId();
-        notificationData.titleColor = "#ffffff";
-        notificationData.subtitleColor = "#f57482";
-
-        closeTrade(tradeData, notificationData);
+        for (TradeData tradeData : ON_GOING_TRADES)
+        {
+            if (tradeData.playerUUIDs.contains(playerRef.getUuid()))
+            {
+                cancelTrade(tradeData);
+            }
+        }
     }
 
-    public static void closeTrade(TradeData tradeData, NotificationData notificationData)
+    public static void cancelTrade(TradeData tradeData)
+    {
+        closeTrade(tradeData, false);
+    }
+
+    public static void closeTrade(TradeData tradeData, boolean success)
     {
         if (tradeData != null)
         {
@@ -139,70 +191,104 @@ public class Hytrade extends JavaPlugin
                 PlayerRef playerRef = Universe.get().getPlayer(playerUUID);
                 if (playerRef == null) continue;
 
-                Ref<EntityStore> storeRef = playerRef.getReference();
-                Store<EntityStore> store = storeRef.getStore();
-                Player player = store.getComponent(storeRef, Player.getComponentType());
+                Universe.get().getWorld(playerRef.getWorldUuid()).execute(() -> {
+                    Ref<EntityStore> storeRef = playerRef.getReference();
+                    Store<EntityStore> store = storeRef.getStore();
+                    Player player = store.getComponent(storeRef, Player.getComponentType());
 
-                notificationData.playerRef = playerRef;
-                NotificationHelper.send(notificationData);
+                    String language = PlayerConfigData.getConfigData(playerUUID).vars.language.getValue();
+                    NotificationHelper.send(playerRef, new NotificationData(
+                            TranslationHelper.getTranslation("notification.trade.title", language),
+                            TranslationHelper.getTranslation(success ?
+                                                             "notification.trade.success" :
+                                                             "notification.trade.cancelled", language),
+                            HytradeConfig.get().getNotificationIconId(),
+                            "#ffffff", success ? "#2ae917" : "#f57482"
+                    ));
 
-                player.getPageManager().setPage(storeRef, store, Page.None);
+                    player.getPageManager().setPage(storeRef, store, Page.None);
+                });
             }
 
-            Hytrade.onGoingTrades.remove(tradeData);
+            Hytrade.ON_GOING_TRADES.remove(tradeData);
         }
     }
 
     public static void finalizeTrade(TradeData tradeData)
     {
-        //Player 1 - Put stacks in a temporary container
-        UUID playerUuid1 = tradeData.playerUUIDs.get(0);
-        PlayerRef playerRef1 = Universe.get().getPlayer(playerUuid1);
-        Ref<EntityStore> ref1 = playerRef1.getReference();
-        Store<EntityStore> store1 = ref1.getStore();
-        Player player1 = store1.getComponent(ref1, Player.getComponentType());
-        ItemContainer itemContainer1 = player1.getInventory().getCombinedStorageFirst().getContainerForSlot((short)0);
+        for (UUID playerUUID : tradeData.playerUUIDs)
+        {
+            PlayerRef playerRef = Universe.get().getPlayer(playerUUID);
+            Universe.get().getWorld(playerRef.getWorldUuid()).execute(() -> {
+                Map<Integer, ItemStack> playerAddedStacks = tradeData.playersItemsPools.get(playerUUID);
+                Ref<EntityStore> ref = playerRef.getReference();
+                Store<EntityStore> store = ref.getStore();
+                Player player = store.getComponent(ref, Player.getComponentType());
+                ItemContainer itemContainer = player.getInventory().getCombinedStorageFirst().getContainerForSlot((short)0);
 
-        Map<Integer, ItemStack> playerAddedStacks1 = tradeData.playersItemsPools.get(playerUuid1);
-        ItemContainer transitionContainer1 = SimpleItemContainer.getNewContainer((short)playerAddedStacks1.size());
-        playerAddedStacks1.forEach((stackSelectorId, itemStack) ->  {
-            ItemStackTransaction transaction = itemContainer1.removeItemStack(itemStack);
-            transitionContainer1.addItemStack(transaction.getQuery());
-        });
+                List<ItemStack> playerItemStacks = playerAddedStacks.values().stream().toList();
+                itemContainer.removeItemStacks(playerItemStacks);
+                tradeData.addItemStacksToTransitionContainer(playerUUID, itemContainer, playerAddedStacks.values().stream().toList());
+            });
+        }
+    }
 
-        //Player 2 - Put stacks in a temporary container
-        UUID playerUuid2 = tradeData.playerUUIDs.get(1);
-        PlayerRef playerRef2 = Universe.get().getPlayer(playerUuid2);
-        Ref<EntityStore> ref2 = playerRef2.getReference();
-        Store<EntityStore> store2 = ref2.getStore();
-        Player player2 = store2.getComponent(ref2, Player.getComponentType());
-        ItemContainer itemContainer2 = player2.getInventory().getCombinedStorageFirst().getContainerForSlot((short)0);
+    public static void onItemsTraded(TradeData tradeData)
+    {
+        Hytrade.finalizeMoneyTrade(tradeData);
+        Hytrade.closeTrade(tradeData, true);
+    }
 
-        Map<Integer, ItemStack> playerAddedStacks2 = tradeData.playersItemsPools.get(playerUuid2);
-        ItemContainer transitionContainer2 = SimpleItemContainer.getNewContainer((short)playerAddedStacks2.size());
-        playerAddedStacks2.forEach((stackSelectorId, itemStack) ->  {
-            ItemStackTransaction transaction = itemContainer2.removeItemStack(itemStack);
-            transitionContainer2.addItemStack(transaction.getQuery());
-        });
+    private static void finalizeMoneyTrade(TradeData tradeData)
+    {
+        Economy economyObj = HytradeVaultUnlocked.getEconomyObj();
+        if (economyObj == null) return;
 
-        //Both - Distribute temporary containers stacks
-        transitionContainer1.moveAllItemStacksTo(itemContainer2);
-        transitionContainer2.moveAllItemStacksTo(itemContainer1);
+        List<UUID> uuids = tradeData.playersMoneyInTrade.keySet().stream().toList();
 
-        NotificationData notificationData = new NotificationData();
-        notificationData.title = "Trade";
-        notificationData.subtitle = "Trade succeed.";
-        notificationData.iconId = HytradeConfig.get().getNotificationIconId();
-        notificationData.titleColor = "#ffffff";
-        notificationData.subtitleColor = "#2ae917";
+        UUID player1UUID = uuids.get(0);
+        BigDecimal player1Amount = BigDecimal.valueOf(tradeData.playersMoneyInTrade.get(player1UUID));
 
-        closeTrade(tradeData, notificationData);
+        UUID player2UUID = uuids.get(1);
+        BigDecimal player2Amount = BigDecimal.valueOf(tradeData.playersMoneyInTrade.get(player2UUID));
+
+        boolean player1HasEnoughMoney = economyObj.has("Hytrade", player1UUID, player1Amount);
+        boolean player2HasEnoughMoney = economyObj.has("Hytrade", player2UUID, player2Amount);
+        if (!player1HasEnoughMoney || !player2HasEnoughMoney)
+        {
+            String player1Lang = PlayerConfigData.getConfigData(player1UUID).vars.language.getValue();
+            String player2Lang = PlayerConfigData.getConfigData(player2UUID).vars.language.getValue();
+
+            Message player1Msg = Message.raw(TranslationHelper.getTranslation(
+                    player1HasEnoughMoney ? "message.trade.other_no_money" : "message.trade.you_no_money",
+                    player1Lang
+            ));
+
+            Message player2Msg = Message.raw(TranslationHelper.getTranslation(
+                    player2HasEnoughMoney ? "message.trade.other_no_money" : "message.trade.you_no_money",
+                    player2Lang
+            ));
+
+            PlayerRef p1 = Universe.get().getPlayer(player1UUID);
+            if (p1 != null) p1.sendMessage(player1Msg);
+
+            PlayerRef p2 = Universe.get().getPlayer(player2UUID);
+            if (p2 != null) p2.sendMessage(player2Msg);
+
+            return;
+        }
+
+        economyObj.withdraw("Hytrade", player1UUID, player1Amount);
+        economyObj.deposit("Hytrade", player2UUID, player1Amount);
+
+        economyObj.withdraw("Hytrade", player2UUID, player2Amount);
+        economyObj.deposit("Hytrade", player1UUID, player2Amount);
     }
     
     public static Boolean isPlayerTrading(PlayerRef playerRef)
     {
         UUID playerUuid = playerRef.getUuid();
-        for (TradeData tradeData : onGoingTrades)
+        for (TradeData tradeData : ON_GOING_TRADES)
         {
             if (tradeData.playerUUIDs.contains(playerUuid)) return true;
         }

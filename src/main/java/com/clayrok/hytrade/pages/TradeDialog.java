@@ -4,7 +4,7 @@ import com.clayrok.hytrade.Hytrade;
 import com.clayrok.hytrade.HytradeConfig;
 import com.clayrok.hytrade.data.PlayerConfigData;
 import com.clayrok.hytrade.data.EventActionData;
-import com.clayrok.hytrade.helpers.JsonStr;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hypixel.hytale.component.Ref;
@@ -48,22 +48,24 @@ public class TradeDialog extends InteractiveCustomUIPage<EventActionData>
         uiCommandBuilder.append("Pages/TradeDialog.ui");
         uiCommandBuilder.set("#SenderUsername.Text", senderPlayerRef.getUsername());
 
+        translate(uiCommandBuilder);
+
         uiEventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#YesButton",
-                new EventData().append("ActionDataJson", new JsonStr().add("actionId", "YES").str())
+                new EventData().append("ActionId", "YES")
         );
 
         uiEventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#NoButton",
-                new EventData().append("ActionDataJson", new JsonStr().add("actionId", "NO").str())
+                new EventData().append("ActionId", "NO")
         );
 
         uiEventBuilder.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#IgnoreButton",
-                new EventData().append("ActionDataJson", new JsonStr().add("actionId", "IGNORE").str())
+                new EventData().append("ActionId", "IGNORE")
         );
 
         playOpenSound();
@@ -88,21 +90,23 @@ public class TradeDialog extends InteractiveCustomUIPage<EventActionData>
         SoundUtil.playSoundEvent2dToPlayer(playerRef, tradeAskOpenSoundIndex, SoundCategory.UI);
     }
 
-    @Override
-    public void handleDataEvent(@NonNullDecl Ref<EntityStore> ref, @NonNullDecl Store<EntityStore> store, @NonNullDecl EventActionData jsonData)
+    private void translate(UICommandBuilder uiBuilder)
     {
-        JsonObject obj = null;
-        if (jsonData.actionDataJson != null)
-        {
-            obj = JsonParser.parseString(jsonData.actionDataJson).getAsJsonObject();
-        }
-        else
-        {
-            sendUpdate();
-            return;
-        }
+        String language = playerConfigData.vars.language.getValue();
 
-        String actionId = obj.get("actionId").getAsString();
+        uiBuilder.set("#DialogTitle.Text", TranslationHelper.getTranslation("ui.dialog.title", language));
+        uiBuilder.set("#AskPhrase.Text", TranslationHelper.getTranslation("ui.dialog.ask_phrase", language));
+        uiBuilder.set("#YesButton #Label.Text", TranslationHelper.getTranslation("ui.dialog.yes", language));
+        uiBuilder.set("#NoButton #Label.Text", TranslationHelper.getTranslation("ui.dialog.no", language));
+        uiBuilder.set("#IgnoreButton #Label.Text", TranslationHelper.getTranslation("ui.dialog.ignore", language));
+    }
+
+    @Override
+    public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, String rawData)
+    {
+        JsonObject jsonObj = JsonParser.parseString(rawData).getAsJsonObject();
+
+        String actionId = jsonObj.get("ActionId").getAsString();
         switch (actionId)
         {
             case "YES" -> onYesClicked();

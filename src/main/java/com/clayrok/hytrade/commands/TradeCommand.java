@@ -4,12 +4,15 @@ import com.clayrok.hytrade.Hytrade;
 import com.clayrok.hytrade.HytradeConfig;
 import com.clayrok.hytrade.data.PlayerConfigData;
 import com.clayrok.hytrade.helpers.NotificationHelper;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.clayrok.hytrade.data.NotificationData;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
+import com.hypixel.hytale.server.core.command.system.CommandSender;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
@@ -32,31 +35,36 @@ public class TradeCommand extends AbstractPlayerCommand
         super("Trade", "Sends a trade request.", false);
         playerArg = withRequiredArg("playerName", "Target player", ArgTypes.STRING);
 
-        if (!HytradeConfig.get().arePermsEmpty()) this.requirePermission(HytradeConfig.get().getFullPermTrade());
+        if (!HytradeConfig.get().arePermsEmpty())
+        {
+            String perm = HytradeConfig.get().getFullPermTrade();
+            this.requirePermission(perm);
+        }
     }
 
     @Override
     protected void execute(CommandContext context, Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef playerRef, World world)
     {
         UUID playerUUID = playerRef.getUuid();
+        String language = PlayerConfigData.getConfigData(playerUUID).vars.language.getValue();
 
         String targetPlayerName = playerArg.get(context);
         PlayerRef targetPlayerRef = Universe.get().getPlayerByUsername(targetPlayerName, NameMatching.DEFAULT);
 
         try
         {
-            if (targetPlayerRef == null) throw new Exception("Player not found.");
+            if (targetPlayerRef == null) throw new Exception(TranslationHelper.getTranslation("error.player_not_found", language));
 
             UUID targetPlayerUUID = targetPlayerRef.getUuid();
-            if (playerUUID.equals(targetPlayerUUID)) throw new Exception("You cannot trade with yourself.");
+            if (playerUUID.equals(targetPlayerUUID)) throw new Exception(TranslationHelper.getTranslation("error.trade_self", language));
 
-            if (Hytrade.isPlayerTrading(playerRef)) throw new Exception("You are already trading.");
-            if (isOnCooldown(playerUUID)) throw new Exception("Please wait before trading again.");
+            if (Hytrade.isPlayerTrading(playerRef)) throw new Exception(TranslationHelper.getTranslation("error.already_trading", language));
+            if (isOnCooldown(playerUUID)) throw new Exception(TranslationHelper.getTranslation("error.trade_cooldown", language));
 
             PlayerConfigData targetConfig = PlayerConfigData.getConfigData(targetPlayerUUID);
             if (targetConfig.vars.tradeIgnore.getValue()) return;
 
-            if (isTooFar(playerRef, targetPlayerRef)) throw new Exception("Player too far away.");
+            if (isTooFar(playerRef, targetPlayerRef)) throw new Exception(TranslationHelper.getTranslation("error.player_too_far", language));
 
             if (Hytrade.isPlayerTrading(targetPlayerRef)) return;
             if (isIgnored(playerUUID, targetPlayerUUID)) return;
@@ -65,15 +73,13 @@ public class TradeCommand extends AbstractPlayerCommand
         }
         catch (Exception e)
         {
-            NotificationData notificationData = new NotificationData();
-            notificationData.playerRef = playerRef;
-            notificationData.title = "Trade";
-            notificationData.subtitle = e.getMessage();
-            notificationData.iconId = HytradeConfig.get().getNotificationIconId();
-            notificationData.titleColor = "#ffffff";
-            notificationData.subtitleColor = "#f57482";
+            NotificationData notificationData = new NotificationData(
+                    TranslationHelper.getTranslation("notification.trade.title", language),
+                    e.getMessage(), HytradeConfig.get().getNotificationIconId(),
+                    "#ffffff", "#f57482"
+            );
 
-            NotificationHelper.send(notificationData);
+            NotificationHelper.send(playerRef, notificationData);
         }
     }
 

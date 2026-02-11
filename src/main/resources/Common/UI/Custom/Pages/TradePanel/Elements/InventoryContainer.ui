@@ -1,4 +1,4 @@
-$C = "../../Common.ui";
+$C = "../../../Common.ui";
 
 $C.@Container {
     ScrollbarStyle: $C.@DefaultScrollbarStyle;
@@ -9,7 +9,7 @@ $C.@Container {
         Group {
             Anchor: (Horizontal: 1);
 
-            $C.@Title {
+            $C.@Title #InventoryTitle {
                 @Text = "Inventory";
                 Style: (TextColor: #ffffff, Alignment: Center);
             }

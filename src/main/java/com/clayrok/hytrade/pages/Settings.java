@@ -3,7 +3,9 @@ package com.clayrok.hytrade.pages;
 import com.clayrok.hytrade.data.PlayerConfigData;
 import com.clayrok.hytrade.data.EventActionData;
 import com.clayrok.hytrade.data.TradeContentLayoutData;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.google.gson.JsonElement;
+import com.clayrok.hytrade.helpers.TranslationHelper;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hypixel.hytale.component.Ref;
@@ -12,6 +14,8 @@ import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
+import com.hypixel.hytale.server.core.ui.DropdownEntryInfo;
+import com.hypixel.hytale.server.core.ui.LocalizableString;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
@@ -20,17 +24,23 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Settings extends InteractiveCustomUIPage<EventActionData>
 {
     private PlayerConfigData playerConfigData = null;
+    private String language = "en-US";
 
     public Settings(@NonNullDecl PlayerRef playerRef)
     {
         super(playerRef, CustomPageLifetime.CanDismiss, EventActionData.CODEC);
         playerConfigData = PlayerConfigData.getConfigData(playerRef.getUuid());
+        language = playerConfigData.vars.language.getValue();
     }
 
     @Override
@@ -44,6 +54,9 @@ public class Settings extends InteractiveCustomUIPage<EventActionData>
         buildLayoutPosition(uiBuilder, eventBuilder);
         buildIgnoreTradeCheckbox(uiBuilder, eventBuilder);
         buildIgnoredPlayersList(uiBuilder, eventBuilder, "");
+        buildLanguageDropdown(uiBuilder, eventBuilder);
+
+        translate(uiBuilder);
 
         eventBuilder.addEventBinding(
                 CustomUIEventBindingType.FocusLost,
@@ -166,7 +179,7 @@ public class Settings extends InteractiveCustomUIPage<EventActionData>
                 continue;
             }
 
-            String identifier = "#Player" + ignoredPlayer.username;
+            String identifier = "#Player" + toHashLetterString(ignoredPlayer.username);
 
             uiBuilder.appendInline("#IgnoredPlayersList", "Group %s {}".formatted(identifier));
             uiBuilder.append("#IgnoredPlayersList %s".formatted(identifier), "Pages/Settings/IgnoredPlayerLine.ui");
@@ -181,14 +194,88 @@ public class Settings extends InteractiveCustomUIPage<EventActionData>
         }
     }
 
+    public String toHashLetterString(String input)
+    {
+        try
+        {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes());
+
+            StringBuilder letters = new StringBuilder();
+            for (byte b : hash) {
+                int val = Byte.toUnsignedInt(b);
+                letters.append((char) ('a' + (val % 26)));
+            }
+            return letters.toString();
+        }
+        catch (Exception e) {}
+
+        return "";
+    }
+
     private void refresh()
     {
+        language = playerConfigData.vars.language.getValue();
+
         UICommandBuilder uiBuilder = new UICommandBuilder();
         UIEventBuilder eventBuilder = new UIEventBuilder();
 
         buildLayoutPosition(uiBuilder, eventBuilder);
 
+        translate(uiBuilder);
+
         sendUpdate(uiBuilder, eventBuilder, false);
+    }
+
+    private void translate(UICommandBuilder uiBuilder)
+    {
+        uiBuilder.set("#SettingsTitle.Text", TranslationHelper.getTranslation("ui.settings.title", language));
+        uiBuilder.set("#LanguageTitle.Text", TranslationHelper.getTranslation("ui.settings.language", language));
+        uiBuilder.set("#PositionLayoutTitle.Text", TranslationHelper.getTranslation("ui.settings.position_and_layout", language));
+        uiBuilder.set("#IgnoredPlayerTitle.Text", TranslationHelper.getTranslation("ui.settings.ignored_players", language));
+        uiBuilder.set("#TextField.PlaceholderText", TranslationHelper.getTranslation("ui.settings.field_placeholder", language));
+        uiBuilder.set("#IgnoreTradeRequestsCheckbox[1].Text",
+                TranslationHelper.getTranslation("ui.settings.ignore_all_trade_requests", language));
+        uiBuilder.set("#CloseBtn.Text", TranslationHelper.getTranslation("ui.settings.close", language));
+        uiBuilder.set("#Signature.Text", TranslationHelper.getTranslation("ui.settings.signature", language));
+
+        List<TradeContentLayoutData> layouts = TradeContentLayoutData.getAllLayouts();
+        for (TradeContentLayoutData layout : layouts)
+        {
+            uiBuilder.set("#LayoutPositionButtons #%s #Button.TooltipText".formatted(layout.name),
+                    TranslationHelper.getTranslation(layout.translationKey, language));
+        }
+
+        uiBuilder.set("#posLeft #Button.TooltipText", TranslationHelper.getTranslation("ui.settings.pos.left", language));
+        uiBuilder.set("#posCenter #Button.TooltipText", TranslationHelper.getTranslation("ui.settings.pos.center", language));
+        uiBuilder.set("#posRight #Button.TooltipText", TranslationHelper.getTranslation("ui.settings.pos.right", language));
+    }
+
+    private void buildLanguageDropdown(UICommandBuilder uiBuilder, UIEventBuilder eventBuilder)
+    {
+        List<DropdownEntryInfo> languagesEntries = new ArrayList<>();
+        Map<String, String> availableLanguages = TranslationHelper.getAvailableLanguages();
+        availableLanguages.forEach((code, name) -> {
+            DropdownEntryInfo entry = new DropdownEntryInfo(LocalizableString.fromString(name), code);
+            if (code.equals(language))
+            {
+                languagesEntries.addFirst(entry);
+            }
+            else
+            {
+                languagesEntries.add(entry);
+            }
+        });
+        uiBuilder.set("#LanguageSelector.Entries", languagesEntries);
+
+        uiBuilder.set("#LanguageSelector.Value", availableLanguages.containsKey(language) ?
+                                                 language : "en-US");
+
+        eventBuilder.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                "#LanguageSelector",
+                EventData.of("ActionId", "LANGUAGE_CHANGED").append("@Language", "#LanguageSelector.Value")
+        );
     }
 
     @Override
@@ -200,6 +287,7 @@ public class Settings extends InteractiveCustomUIPage<EventActionData>
         String actionId = jsonData.get("ActionId").getAsString();
         switch (actionId)
         {
+            case "LANGUAGE_CHANGED" -> changeLanguage(jsonData.get("@Language").getAsString());
             case "IGNORE_ALL_TRADE_UPDATE" -> updateIgnoreAllTrades(jsonData.get("@IgnoreTradeRequests").getAsBoolean());
             case "POS_UPDATE" -> updatePos(jsonData.get("NewPos").getAsInt());
             case "LAYOUT_UPDATE" -> updateLayout(jsonData.get("NewLayout").getAsString());
@@ -209,6 +297,12 @@ public class Settings extends InteractiveCustomUIPage<EventActionData>
             case "CLOSE" -> close();
         }
 
+        refresh();
+    }
+
+    private void changeLanguage(String newLanguage)
+    {
+        playerConfigData.vars.language.setValue(newLanguage);
         refresh();
     }
 
