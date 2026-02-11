@@ -54,3 +54,7 @@ The `config.json` allows server owners to customize the experience:
 ![Trade UI horizontal right](https://i.imgur.com/IHOHHk0.png)
 ![Trade Success Notification](https://i.imgur.com/3oDclUP.jpeg)
 ![Trade Cancel Notification](https://i.imgur.com/6qoEprG.jpeg)
+
+## LICENSE
+Licensed under a custom license allowing commercial use but prohibiting resale.
+See LICENSE.md for details.
