@@ -6,8 +6,6 @@ import com.hypixel.hytale.server.core.HytaleServer;
 import net.cfh.vault.VaultUnlockedServicesManager;
 import net.milkbowl.vault2.economy.Economy;
 
-import java.math.BigDecimal;
-import java.util.UUID;
 
 public class HytradeVaultUnlocked
 {

@@ -1,7 +1,8 @@
 {
   "Group": "com.clayrok",
   "Name": "Hytrade",
-  "Version": "1.0.5-hotfix1",
+  "Version": "1.0.6",
+  "ServerVersion":"2026.02.19-1a311a592",
   "Description": "Trade safely with other players.",
   "Authors": [{"Name": "Clayrok"}],
   "Main": "com.clayrok.hytrade.Hytrade",

@@ -2,6 +2,7 @@ package com.clayrok.hytrade;
 
 import com.hypixel.hytale.common.util.ArrayUtil;
 import com.hypixel.hytale.protocol.Packet;
+import com.hypixel.hytale.protocol.ToClientPacket;
 import com.hypixel.hytale.protocol.packets.setup.AssetFinalize;
 import com.hypixel.hytale.protocol.packets.setup.AssetInitialize;
 import com.hypixel.hytale.protocol.packets.setup.AssetPart;
@@ -80,7 +81,7 @@ public class DynamicImageService
     private static void sendRawPackets(PacketHandler handler, CommonAsset asset, byte[] data)
     {
         byte[][] parts = ArrayUtil.split(data, MAX_PART_SIZE);
-        Packet[] packets = new Packet[2 + parts.length];
+        ToClientPacket[] packets = new ToClientPacket[2 + parts.length];
 
         packets[0] = new AssetInitialize(asset.toPacket(), data.length);
         for (int i = 0; i < parts.length; i++)

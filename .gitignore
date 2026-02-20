@@ -16,7 +16,7 @@ pom.xml.versionsBackup
 
 # Hytale
 .hytale
-libs/HytaleServer.jar
+libs/*
 server/*
 
 .theia/
